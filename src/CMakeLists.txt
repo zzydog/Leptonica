@@ -1,14 +1,21 @@
-#
-# leptonica
-#
 
-################################################################################
+###############################################################################
+# library settings
+###############################################################################
 
-########################################
-# SHARED LIBRARY leptonica
-########################################
-
-set(leptonica_src
+# The files in our project
+set( HEADERS 
+    allheaders.h alltypes.h
+    recog.h regutils.h stack.h
+    bmf.h bmfdata.h bmp.h ccbord.h
+    dewarp.h endianness.h environ.h
+    gplot.h heap.h imageio.h jbclass.h
+    leptwin.h list.h morph.h pix.h
+    stringcode.h sudoku.h watershed.h
+    ptra.h queue.h rbtree.h readbarcode.h
+    array.h arrayaccess.h bbuffer.h bilateral.h
+)
+set( SOURCES
     adaptmap.c affine.c
     affinecompose.c arrayaccess.c
     bardecode.c baseline.c bbuffer.c
@@ -66,58 +73,57 @@ set(leptonica_src
     webpio.c webpiostub.c
     writefile.c zlibmem.c zlibmemstub.c
 )
-if (MSVC)
-set_source_files_properties(${leptonica_src} PROPERTIES LANGUAGE CXX)
+
+# Default is to Compile a SHARED library
+if( NOT LEPTONICA_LIBRARIE_TYPE )
+    set(LEPTONICA_LIBRARIE_TYPE "SHARED")
+endif()
+add_library(${LEPTONICA} ${LEPTONICA_LIBRARIE_TYPE} 
+    ${SOURCES} ${HEADERS} ${LIBRARY_HEADERS})
+target_link_libraries(${LEPTONICA} ${ZLIB} ${PNG} ${TIFF} ${JPEG})
+if( LEPTONICA_LIBRARIE_TYPE STREQUAL "SHARED" )
+    # Export all interfaces when compiling a shared library
+    target_compile_definitions(${LEPTONICA} PRIVATE LIBLEPT_EXPORTS)
+    target_compile_definitions(${LEPTONICA} INTERFACE LIBLEPT_IMPORTS)
 endif()
 
-set(leptonica_hdr
-    allheaders.h alltypes.h
-    array.h arrayaccess.h bbuffer.h bilateral.h
-    bmf.h bmfdata.h bmp.h ccbord.h
-    dewarp.h endianness.h environ.h
-    gplot.h heap.h imageio.h jbclass.h
-    leptwin.h list.h morph.h pix.h
-    ptra.h queue.h rbtree.h readbarcode.h
-    recog.h regutils.h stack.h
-    stringcode.h sudoku.h watershed.h
-)
-
-add_library                     (leptonica ${LIBRARY_TYPE} ${leptonica_src} ${leptonica_hdr})
-set_target_properties           (leptonica PROPERTIES VERSION   ${VERSION_MAJOR}.${VERSION_MINOR})
-set_target_properties           (leptonica PROPERTIES SOVERSION ${VERSION_MAJOR}.${VERSION_MINOR})
-if (WIN32)
-set_target_properties           (leptonica PROPERTIES OUTPUT_NAME       lept${VERSION_MAJOR}${VERSION_MINOR})
-set_target_properties           (leptonica PROPERTIES DEBUG_OUTPUT_NAME lept${VERSION_MAJOR}${VERSION_MINOR}d)
+# Set properties on the target.
+set_target_properties(${LEPTONICA} PROPERTIES PREFIX "")
+set_target_properties(${LEPTONICA} PROPERTIES LIBRARY_OUTPUT_NAME ${LEPTONICA})
+if ( MSVC )
+    set_target_properties(${LEPTONICA} PROPERTIES COMPILE_PDB_NAME ${LEPTONICA})
 endif()
 
-if (NOT STATIC)
-    target_compile_definitions  (leptonica PRIVATE -DLIBLEPT_EXPORTS)
-endif()
-if (GIF_LIBRARY)
-    target_link_libraries       (leptonica ${GIF_LIBRARY})
-endif()
-if (JPEG_LIBRARY)
-    target_link_libraries       (leptonica ${JPEG_LIBRARY})
-endif()
-if (JP2K_FOUND)
-    target_link_libraries       (leptonica ${JP2K_LIBRARIES})
-endif()
-if (PNG_LIBRARY)
-    target_link_libraries       (leptonica ${PNG_LIBRARY})
-endif()
-if (TIFF_LIBRARY)
-    target_link_libraries       (leptonica ${TIFF_LIBRARY})
-endif()
-if (WEBP_FOUND)
-    target_link_libraries       (leptonica ${WEBP_LIBRARIES})
-endif()
-if (ZLIB_LIBRARY)
-    target_link_libraries       (leptonica ${ZLIB_LIBRARY})
-endif()
-if (UNIX)
-    target_link_libraries       (leptonica m)
-endif()
-export(TARGETS leptonica FILE ${CMAKE_BINARY_DIR}/LeptonicaTargets.cmake)
+# Compiler/Linker features on the target
 
-################################################################################
+if ( WIN32 )
+    target_compile_definitions(${LEPTONICA} PRIVATE __WIN32__)
+endif()
 
+if (CYGWIN)
+    target_compile_definitions(${LEPTONICA} PRIVATE __CYGWIN__)
+endif()
+
+if ( MSVC AND WIN32 )
+    # Enable Security Features
+    target_compile_options(${LEPTONICA} PRIVATE /GS)
+    if (NOT ( MSVC_VERSION LESS 1900 ))
+        target_compile_options(${LEPTONICA} PRIVATE /guard:cf)
+    endif()
+    if (NOT ( MSVC_VERSION LESS 1700 ))
+        target_compile_options(${LEPTONICA} PRIVATE /sdl /analyze)
+    endif()
+    # Multiple Processes Building
+    if(MSVC_VERSION GREATER 1400)
+        set(PROCESSOR_COUNT "$ENV{NUMBER_OF_PROCESSORS}")
+        target_compile_options(${LEPTONICA} PRIVATE "/MP${PROCESSOR_COUNT}")
+    endif()
+endif()
+
+if ( MINGW AND WIN32 )
+    # Enable Security Features
+    target_compile_definitions(${ZLIB} PRIVATE _FORTIFY_SOURCE=2)
+    target_compile_options(${LEPTONICA} PRIVATE -fstack-protector-strong)
+    # Enable security APIs
+    target_compile_definitions(${LEPTONICA} PRIVATE MINGW_HAS_SECURE_API)
+endif()

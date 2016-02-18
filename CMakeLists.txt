@@ -1,117 +1,98 @@
-#
-# leptonica
-#
 
 ###############################################################################
-#
 # cmake settings
-#
 ###############################################################################
 
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.0.0)
 
 # In-source builds are disabled.
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR
-        "CMake generation is not possible within the source directory!"
-        "\n Remove the CMakeCache.txt file and try again from another folder, e.g.:"
-        "\n "
-        "\n rm CMakeCache.txt"
-        "\n mkdir build"
-        "\n cd build"
-        "\n cmake .."
+        "CMake generation is not possible within the source directory!\n "
+        "Remove CMakeCache.txt and try again from another folder, e.g.:\n "
+        "rm CMakeCache.txt\n "
+        "mkdir build\n "
+        "cd build\n "
+        "cmake ..\n "
     )
 endif()
 
+set(CMAKE_BINARY_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_OUTPUT_PATH}")
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${CMAKE_SOURCE_DIR}/cmake")
 
-set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}")
 
-# Use solution folders.
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake Targets")
 
 ###############################################################################
-#
-# project settings
-#
+# configuration
 ###############################################################################
 
-project(leptonica C CXX)
+enable_testing()
+enable_language(C)
 
+include(TestBigEndian)
+include(CheckTypeSize)
+include(CheckIncludeFile)
+include(CheckFunctionExists)
+include(CheckCSourceCompiles)
+
+set(LEPTONICA_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR})
+set(LEPTONICA_LIBRARIE ${CMAKE_CURRENT_SOURCE_DIR})
+set(LEPTONICA_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+macro(check_keyword_exists KEYWORD VARIABLE)
+    # See if compiler supports prototypes.
+    check_c_source_compiles(
+        "
+        ${KEYWORD} int test() { return 0; }
+        int main(int argc, char **argv) { return test(); }
+        "
+        HAVE_${KEYWORD}
+    )
+    set(VARIABLE HAVE_${KEYWORD})
+endmacro()
+check_keyword_exists(static HAVE_KEYWORD_INLINE)
+if( NOT HAVE_KEYWORD_INLINE )
+    add_definitions( -Dinline=__inline )
+endif()
+
+
+
+###############################################################################
+# library settings
+###############################################################################
+
+if( NOT LEPTONICA )
+    set(LEPTONICA liblept)
+endif()
+project(${LEPTONICA} C CXX)
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 73)
 set(VERSION_PLAIN ${VERSION_MAJOR}.${VERSION_MINOR})
+set(LEPTONICA_VERSION ${VERSION_MAJOR}.${VERSION_MINOR})
 
-find_package(GIF)
-find_package(JPEG)
-find_package(PNG)
-find_package(TIFF)
-find_package(ZLIB)
-
-find_package(PkgConfig)
-
-if (PKG_CONFIG_FOUND)
-pkg_check_modules(WEBP libwebp)
-pkg_check_modules(JP2K libopenjp2)
-endif()
-
-###############################################################################
-#
-# compiler and linker
-#
-###############################################################################
-
-set(LIBRARY_TYPE SHARED)
-if (STATIC)
-    set(LIBRARY_TYPE)
-endif()
-
-if (WIN32)
-    if (MSVC)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W1")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-    endif()
-endif()
-
-###############################################################################
-#
-# configure
-#
-###############################################################################
-
-set(AUTOCONFIG_SRC ${CMAKE_BINARY_DIR}/config_auto.h.in)
-set(AUTOCONFIG ${CMAKE_BINARY_DIR}/src/config_auto.h)
-
-include(Configure)
-
-configure_file(${AUTOCONFIG_SRC} ${AUTOCONFIG} @ONLY)
-
-set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src)
-
+include(cmake/Find3rdLibs.cmake)    # Here, we find all libraries
 configure_file(
-    ${CMAKE_SOURCE_DIR}/cmake/templates/LeptonicaConfig-version.cmake.in
-    ${CMAKE_BINARY_DIR}/LeptonicaConfig-version.cmake @ONLY)
-configure_file(
-    ${CMAKE_SOURCE_DIR}/cmake/templates/LeptonicaConfig.cmake.in
-    ${CMAKE_BINARY_DIR}/LeptonicaConfig.cmake @ONLY)
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/config_auto.h.cmakein
+    ${CMAKE_CURRENT_BINARY_DIR}/config_auto.h @ONLY
+)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src") # Build the library
+
+
+# The configuration file and included directories
+include_directories( 
+    "${${LEPTONICA}_SOURCE_DIR}" "${${LEPTONICA}_BINARY_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/prog" "${CMAKE_CURRENT_BINARY_DIR}/prog"
+)
+
 
 ###############################################################################
-#
-# build
-#
+# program settings
 ###############################################################################
 
-add_definitions(-DHAVE_CONFIG_H)
-
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/src)
-
-if (BUILD_PROG)
-add_subdirectory(prog)
+# Build all test programs if it's not a sub-project
+if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/prog")    # Build programs
 endif()
 
-add_subdirectory(src)
-
-###############################################################################
